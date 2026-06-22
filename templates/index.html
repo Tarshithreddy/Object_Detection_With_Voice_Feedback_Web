@@ -1,109 +1,124 @@
 <!DOCTYPE html>
+
 <html>
+
 <head>
-    <title>YOLO AI System</title>
 
-    <style>
-        body {
-            text-align: center;
-            font-family: Arial;
-            background: #f2f2f2;
-        }
+<title>
 
-        video, img {
-            display: block;
-            margin: auto;
-            border-radius: 10px;
-        }
+Object Detection
 
-        video {
-            width: 400px;
-        }
+</title>
 
-        img {
-            width: 500px;
-            margin-top: 10px;
-        }
+<link rel="stylesheet"
 
-        button {
-            padding: 10px 20px;
-            margin: 10px;
-            background: blue;
-            color: white;
-            border: none;
-            cursor: pointer;
-            border-radius: 5px;
-        }
+href="{{ url_for('static', filename='style.css') }}">
 
-        #text {
-            font-size: 18px;
-            font-weight: bold;
-            margin-top: 10px;
-        }
-    </style>
 </head>
 
 <body>
 
-<h2>YOLO Object Detection</h2>
+<h1>
 
-<button onclick="start()">Start Camera</button>
-<button onclick="stop()">Stop Camera</button>
+Real Time Object Detection
 
-<video id="video" autoplay></video>
-<canvas id="canvas" style="display:none;"></canvas>
+</h1>
 
-<p id="text">Waiting...</p>
+<h2>
 
-<img id="output"/>
+YOLOv4 Assistive System
+
+</h2>
+
+
+<button onclick="startCamera()">
+
+Start Camera
+
+</button>
+
+
+<button onclick="stopCamera()">
+
+Stop Camera
+
+</button>
+
+<br><br>
+
+<p id="voice_text"></p>
+
+<img id="video_feed">
+
 
 <script>
 
-let running = false;
+function startCamera(){
 
-const video = document.getElementById("video");
-const canvas = document.getElementById("canvas");
-const output = document.getElementById("output");
-const text = document.getElementById("text");
+fetch('/start_camera')
 
-// camera
-navigator.mediaDevices.getUserMedia({ video: true })
-.then(stream => video.srcObject = stream);
+.then(response=>{
 
-function start() {
-    running = true;
+document.getElementById("video_feed").src="/video";
+
+});
+
 }
 
-function stop() {
-    running = false;
+
+function stopCamera(){
+
+fetch('/stop_camera')
+
+.then(response=>{
+
+document.getElementById("video_feed").src="";
+
+speechSynthesis.cancel();
+
+});
+
 }
 
-function sendFrame() {
-    if (!running) return;
 
-    const ctx = canvas.getContext("2d");
-    canvas.width = video.videoWidth;
-    canvas.height = video.videoHeight;
+let previousText="";
 
-    ctx.drawImage(video, 0, 0);
 
-    const image = canvas.toDataURL("image/jpeg");
+setInterval(()=>{
 
-    fetch("/detect", {
-        method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ image })
-    })
-    .then(res => res.json())
-    .then(data => {
-        output.src = "data:image/jpeg;base64," + data.image;
-        text.innerText = data.text || "No detection";
-    });
+fetch("/get_detection")
+
+.then(response=>response.text())
+
+.then(data=>{
+
+if(data!="" && data!=previousText){
+
+previousText=data;
+
+document.getElementById("voice_text").innerHTML=data;
+
+
+let speech = new SpeechSynthesisUtterance(data);
+
+speech.rate=1;
+
+speech.pitch=1;
+
+speech.volume=1;
+
+
+speechSynthesis.speak(speech);
+
 }
 
-setInterval(sendFrame, 400);
+});
+
+},3000);
+
 
 </script>
 
 </body>
+
 </html>
