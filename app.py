@@ -1,7 +1,10 @@
-from flask import Flask, render_template, Response, request, jsonify
+from flask import Flask, render_template, request, jsonify
 import cv2
 import numpy as np
 import base64
+import pyttsx3
+import threading
+import os
 
 app = Flask(__name__)
 
@@ -17,10 +20,17 @@ output_layers = [layer_names[i - 1] for i in net.getUnconnectedOutLayers()]
 
 labels = open("yolo-coco/coco.names").read().strip().split("\n")
 
-last_detection = ""
+# ---------------- VOICE ---------------- #
 
-camera_active = False
+engine = pyttsx3.init()
+last_spoken = ""
 
+def speak(text):
+    global last_spoken
+    if text != last_spoken:
+        last_spoken = text
+        engine.say(text)
+        engine.runAndWait()
 
 # ---------------- LOGIC ---------------- #
 
@@ -42,19 +52,14 @@ def calculate_distance(height):
 
 
 def process_frame(frame):
-    global last_detection
-
     H, W = frame.shape[:2]
 
-    blob = cv2.dnn.blobFromImage(
-        frame, 1/255.0, (416, 416),
-        swapRB=True, crop=False
-    )
-
+    blob = cv2.dnn.blobFromImage(frame, 1/255.0, (416, 416), swapRB=True)
     net.setInput(blob)
     outputs = net.forward(output_layers)
 
     boxes, confidences, class_ids = [], [], []
+    detected_text = ""
 
     for output in outputs:
         for detection in output:
@@ -84,14 +89,17 @@ def process_frame(frame):
             distance = calculate_distance(h)
 
             text = f"{label} at {distance:.0f}cm {position}"
-            last_detection = text
+            detected_text = text
 
-            cv2.rectangle(frame, (x, y), (x+w, y+h), (0,255,0), 2)
-            cv2.putText(frame, text, (x, y-10),
-                        cv2.FONT_HERSHEY_SIMPLEX,
-                        0.6, (0,255,0), 2)
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0,255,0), 2)
+            cv2.putText(frame, text, (x, y - 10),
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (0,255,0), 2)
 
-    return frame
+    # voice output
+    if detected_text:
+        threading.Thread(target=speak, args=(detected_text,)).start()
+
+    return frame, detected_text
 
 
 # ---------------- ROUTES ---------------- #
@@ -101,48 +109,25 @@ def index():
     return render_template("index.html")
 
 
-@app.route('/start')
-def start():
-    global camera_active
-    camera_active = True
-    return "started"
-
-
-@app.route('/stop')
-def stop():
-    global camera_active
-    camera_active = False
-    return "stopped"
-
-
 @app.route('/detect', methods=['POST'])
 def detect():
-    if not camera_active:
-        return jsonify({'image': None, 'text': 'Camera stopped'})
-
     data = request.json['image']
 
     img_data = base64.b64decode(data.split(',')[1])
     np_arr = np.frombuffer(img_data, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
 
-    frame = process_frame(frame)
+    frame, text = process_frame(frame)
 
     _, buffer = cv2.imencode('.jpg', frame)
     encoded = base64.b64encode(buffer).decode('utf-8')
 
     return jsonify({
-        'image': encoded,
-        'text': last_detection
+        "image": encoded,
+        "text": text
     })
 
 
-@app.route('/get_detection')
-def get_detection():
-    return last_detection
-
-
 if __name__ == "__main__":
-    import os
     port = int(os.environ.get("PORT", 10000))
     app.run(host="0.0.0.0", port=port, debug=False)

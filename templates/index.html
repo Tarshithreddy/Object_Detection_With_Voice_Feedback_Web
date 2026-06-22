@@ -1,24 +1,72 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>YOLO AI System</title>
+    <title>YOLO Browser AI</title>
+
+    <style>
+        body {
+            text-align: center;
+            font-family: Arial;
+            background: #f5f5f5;
+        }
+
+        h2 {
+            margin-top: 20px;
+        }
+
+        video {
+            display: block;
+            margin: auto;
+            width: 400px;
+            border-radius: 10px;
+        }
+
+        img {
+            display: block;
+            margin: auto;
+            width: 500px;
+            margin-top: 10px;
+            border-radius: 10px;
+        }
+
+        button {
+            padding: 10px 20px;
+            margin: 10px;
+            border: none;
+            background: #007bff;
+            color: white;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        #text {
+            font-size: 18px;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+    </style>
 </head>
 
 <body>
-    <h2>YOLO Browser Detection</h2>
+
+    <h2>YOLO Object Detection (Browser AI)</h2>
 
     <button onclick="startCam()">Start Camera</button>
     <button onclick="stopCam()">Stop Camera</button>
 
-    <br><br>
-
     <video id="video" autoplay></video>
     <canvas id="canvas" style="display:none;"></canvas>
 
-    <h3 id="text"></h3>
-    <img id="output" width="500"/>
+    <p id="text">Detection will appear here</p>
+
+    <img id="output"/>
 
 <script>
+
 let streaming = false;
 
 const video = document.getElementById("video");
@@ -26,18 +74,17 @@ const canvas = document.getElementById("canvas");
 const output = document.getElementById("output");
 const text = document.getElementById("text");
 
+// browser camera
 navigator.mediaDevices.getUserMedia({ video: true })
 .then(stream => {
     video.srcObject = stream;
 });
 
 function startCam() {
-    fetch("/start");
     streaming = true;
 }
 
 function stopCam() {
-    fetch("/stop");
     streaming = false;
 }
 
@@ -50,12 +97,12 @@ function sendFrame() {
 
     ctx.drawImage(video, 0, 0);
 
-    let data = canvas.toDataURL("image/jpeg");
+    let image = canvas.toDataURL("image/jpeg");
 
     fetch("/detect", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ image: data })
+        body: JSON.stringify({ image: image })
     })
     .then(res => res.json())
     .then(res => {
@@ -67,6 +114,7 @@ function sendFrame() {
 }
 
 setInterval(sendFrame, 300);
+
 </script>
 
 </body>
