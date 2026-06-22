@@ -19,7 +19,27 @@ labels = open("yolo-coco/coco.names").read().strip().split("\n")
 
 last_detection = ""
 
-# ---------------- PROCESS FRAME ---------------- #
+camera_active = False
+
+
+# ---------------- LOGIC ---------------- #
+
+def get_position(x, w, frame_width):
+    center_x = x + w // 2
+
+    if center_x <= frame_width // 3:
+        return "left"
+    elif center_x <= (frame_width // 3) * 2:
+        return "center"
+    else:
+        return "right"
+
+
+def calculate_distance(height):
+    focal_length = 100
+    real_height = 50
+    return (real_height * focal_length) / height
+
 
 def process_frame(frame):
     global last_detection
@@ -60,13 +80,16 @@ def process_frame(frame):
             x, y, w, h = boxes[i]
             label = labels[class_ids[i]]
 
-            text = f"{label}"
+            position = get_position(x, w, W)
+            distance = calculate_distance(h)
+
+            text = f"{label} at {distance:.0f}cm {position}"
             last_detection = text
 
             cv2.rectangle(frame, (x, y), (x+w, y+h), (0,255,0), 2)
             cv2.putText(frame, text, (x, y-10),
-                        cv2.FONT_HERSHEY_SIMPLEX, 0.6,
-                        (0,255,0), 2)
+                        cv2.FONT_HERSHEY_SIMPLEX,
+                        0.6, (0,255,0), 2)
 
     return frame
 
@@ -78,11 +101,27 @@ def index():
     return render_template("index.html")
 
 
+@app.route('/start')
+def start():
+    global camera_active
+    camera_active = True
+    return "started"
+
+
+@app.route('/stop')
+def stop():
+    global camera_active
+    camera_active = False
+    return "stopped"
+
+
 @app.route('/detect', methods=['POST'])
 def detect():
+    if not camera_active:
+        return jsonify({'image': None, 'text': 'Camera stopped'})
+
     data = request.json['image']
 
-    # decode base64 image
     img_data = base64.b64decode(data.split(',')[1])
     np_arr = np.frombuffer(img_data, np.uint8)
     frame = cv2.imdecode(np_arr, cv2.IMREAD_COLOR)
@@ -92,7 +131,10 @@ def detect():
     _, buffer = cv2.imencode('.jpg', frame)
     encoded = base64.b64encode(buffer).decode('utf-8')
 
-    return jsonify({'image': encoded})
+    return jsonify({
+        'image': encoded,
+        'text': last_detection
+    })
 
 
 @app.route('/get_detection')
