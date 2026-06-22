@@ -4,120 +4,323 @@
 
 <head>
 
-<title>
+    <title>Real Time Object Detection</title>
 
-Object Detection
-
-</title>
-
-<link rel="stylesheet"
-
-href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet"
+    href="{{ url_for('static', filename='style.css') }}">
 
 </head>
 
 <body>
 
-<h1>
+    <h1>
 
-Real Time Object Detection
+        Real Time Object Detection
 
-</h1>
+    </h1>
 
-<h2>
+    <h2>
 
-YOLOv4 Assistive System
+        YOLOv4 Assistive System
 
-</h2>
-
-
-<button onclick="startCamera()">
-
-Start Camera
-
-</button>
+    </h2>
 
 
-<button onclick="stopCamera()">
+    <button onclick="startCamera()">
 
-Stop Camera
+        Start Camera
 
-</button>
+    </button>
 
-<br><br>
 
-<p id="voice_text"></p>
+    <button onclick="stopCamera()">
 
-<img id="video_feed">
+        Stop Camera
+
+    </button>
+
+    <br><br>
+
+
+    <!-- Hidden Camera -->
+
+    <video
+
+        id="video"
+
+        width="640"
+
+        height="480"
+
+        autoplay
+
+        playsinline
+
+        style="display:none;"
+
+    ></video>
+
+
+    <!-- Canvas for Capture -->
+
+    <canvas
+
+        id="canvas"
+
+        width="640"
+
+        height="480"
+
+        style="display:none;"
+
+    ></canvas>
+
+
+    <!-- Detection Result -->
+
+    <img
+
+        id="result"
+
+        width="640"
+
+        height="480"
+
+    >
+
+
+    <br><br>
+
+
+    <p id="voice_text">
+
+    </p>
 
 
 <script>
 
+let video = document.getElementById("video");
+
+let canvas = document.getElementById("canvas");
+
+let result = document.getElementById("result");
+
+let voiceText = document.getElementById("voice_text");
+
+let ctx = canvas.getContext("2d");
+
+
+let interval;
+
+let previousText = "";
+
+
+
 function startCamera(){
 
-fetch('/start_camera')
 
-.then(response=>{
+navigator.mediaDevices.getUserMedia({
 
-document.getElementById("video_feed").src="/video";
+video:true
+
+})
+
+
+.then(function(stream){
+
+
+video.srcObject = stream;
+
+
+interval = setInterval(
+
+captureFrame,
+
+1000
+
+);
+
+
+})
+
+
+.catch(function(err){
+
+alert(
+
+"Camera Permission Denied"
+
+);
+
+console.log(err);
 
 });
 
 }
+
 
 
 function stopCamera(){
 
-fetch('/stop_camera')
 
-.then(response=>{
+clearInterval(interval);
 
-document.getElementById("video_feed").src="";
 
-speechSynthesis.cancel();
+let stream = video.srcObject;
 
-});
+
+if(stream){
+
+stream
+
+.getTracks()
+
+.forEach(
+
+track => track.stop()
+
+);
 
 }
 
 
-let previousText="";
+video.srcObject=null;
 
 
-setInterval(()=>{
+result.src="";
 
-fetch("/get_detection")
 
-.then(response=>response.text())
+speechSynthesis.cancel();
+
+
+voiceText.innerHTML="";
+
+
+}
+
+
+
+function captureFrame(){
+
+
+ctx.drawImage(
+
+video,
+
+0,
+
+0,
+
+canvas.width,
+
+canvas.height
+
+);
+
+
+let imageData =
+
+canvas.toDataURL(
+
+'image/jpeg'
+
+);
+
+
+
+fetch('/detect',{
+
+
+method:'POST',
+
+
+headers:{
+
+'Content-Type':'application/json'
+
+},
+
+
+body:JSON.stringify({
+
+image:imageData
+
+})
+
+
+})
+
+
+.then(response=>response.json())
+
 
 .then(data=>{
 
-if(data!="" && data!=previousText){
 
-previousText=data;
+result.src =
 
-document.getElementById("voice_text").innerHTML=data;
+"data:image/jpeg;base64,"
+
++
+
+data.image;
 
 
-let speech = new SpeechSynthesisUtterance(data);
+
+voiceText.innerHTML=
+
+data.text;
+
+
+
+if(
+
+data.text!="" &&
+
+data.text!=previousText
+
+){
+
+
+previousText=data.text;
+
+
+let speech=
+
+new SpeechSynthesisUtterance(
+
+data.text
+
+);
+
 
 speech.rate=1;
 
+
 speech.pitch=1;
+
 
 speech.volume=1;
 
 
-speechSynthesis.speak(speech);
+speechSynthesis.speak(
+
+speech
+
+);
+
 
 }
 
+
 });
 
-},3000);
+
+}
 
 
 </script>
+
 
 </body>
 

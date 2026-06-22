@@ -1,34 +1,38 @@
-from flask import Flask, render_template, Response
+from flask import Flask, render_template, request, jsonify
 import cv2
 import numpy as np
+import base64
 
 app = Flask(__name__)
 
-# ---------------- YOLOv4 ---------------- #
+
+# ---------------- YOLO ---------------- #
 
 net = cv2.dnn.readNet(
+
     "yolo-coco/yolov4-tiny.weights",
+
     "yolo-coco/yolov4-tiny.cfg"
+
 )
 
 layer_names = net.getLayerNames()
 
 output_layers = [
+
     layer_names[i - 1]
+
     for i in net.getUnconnectedOutLayers()
+
 ]
 
 labels = open(
+
     "yolo-coco/coco.names"
+
 ).read().strip().split("\n")
 
-print("YOLOv4 Loaded")
-
-# ---------------- Global Variables ---------------- #
-
-camera = None
-
-last_detection = ""
+print("YOLO Loaded")
 
 
 # ---------------- Position ---------------- #
@@ -63,232 +67,237 @@ def calculate_distance(height):
     return distance
 
 
-# ---------------- Frames ---------------- #
-
-def generate_frames():
-
-    global camera
-    global last_detection
-
-    while True:
-
-        if camera is None:
-
-            continue
-
-        success, frame = camera.read()
-
-        if not success:
-
-            break
-
-        H, W = frame.shape[:2]
-
-        blob = cv2.dnn.blobFromImage(
-
-            frame,
-
-            1 / 255.0,
-
-            (416, 416),
-
-            swapRB=True,
-
-            crop=False
-
-        )
-
-        net.setInput(blob)
-
-        outputs = net.forward(output_layers)
-
-        boxes = []
-
-        confidences = []
-
-        class_ids = []
-
-        for output in outputs:
-
-            for detection in output:
-
-                scores = detection[5:]
-
-                class_id = np.argmax(scores)
-
-                confidence = scores[class_id]
-
-                if confidence > 0.4:
-
-                    box = detection[0:4] * np.array(
-
-                        [W, H, W, H]
-
-                    )
-
-                    centerX, centerY, width, height = box.astype("int")
-
-                    x = int(centerX - width / 2)
-
-                    y = int(centerY - height / 2)
-
-                    boxes.append(
-
-                        [x, y, int(width), int(height)]
-
-                    )
-
-                    confidences.append(
-
-                        float(confidence)
-
-                    )
-
-                    class_ids.append(class_id)
-
-        idxs = cv2.dnn.NMSBoxes(
-
-            boxes,
-
-            confidences,
-
-            0.5,
-
-            0.4
-
-        )
-
-        if len(idxs) > 0:
-
-            for i in idxs.flatten():
-
-                x, y, w, h = boxes[i]
-
-                label = labels[class_ids[i]]
-
-                position = get_position(
-
-                    x,
-
-                    w,
-
-                    W
-
-                )
-
-                distance = calculate_distance(h)
-
-                text = f"{label} at {distance:.0f}cm {position}"
-
-                last_detection = text
-
-                cv2.rectangle(
-
-                    frame,
-
-                    (x, y),
-
-                    (x + w, y + h),
-
-                    (0, 255, 0),
-
-                    2
-
-                )
-
-                cv2.putText(
-
-                    frame,
-
-                    text,
-
-                    (x, y - 10),
-
-                    cv2.FONT_HERSHEY_SIMPLEX,
-
-                    0.6,
-
-                    (0, 255, 0),
-
-                    2
-
-                )
-
-        ret, buffer = cv2.imencode(
-
-            '.jpg',
-
-            frame
-
-        )
-
-        frame = buffer.tobytes()
-
-        yield (
-
-            b'--frame\r\n'
-
-            b'Content-Type: image/jpeg\r\n\r\n'
-
-            + frame +
-
-            b'\r\n'
-
-        )
-
-
-# ---------------- Routes ---------------- #
+# ---------------- Home ---------------- #
 
 @app.route('/')
+
 def index():
 
     return render_template("index.html")
 
 
-@app.route('/video')
-def video():
+# ---------------- Detect ---------------- #
 
-    return Response(
+@app.route('/detect', methods=['POST'])
 
-        generate_frames(),
+def detect():
 
-        mimetype='multipart/x-mixed-replace; boundary=frame'
+    data = request.json['image']
+
+
+    image_data = data.split(',')[1]
+
+    image_bytes = base64.b64decode(image_data)
+
+
+    np_arr = np.frombuffer(
+
+        image_bytes,
+
+        np.uint8
 
     )
 
 
-@app.route('/start_camera')
-def start_camera():
+    frame = cv2.imdecode(
 
-    global camera
+        np_arr,
 
-    if camera is None:
+        cv2.IMREAD_COLOR
 
-        camera = cv2.VideoCapture(0)
-
-    return "Started"
+    )
 
 
-@app.route('/stop_camera')
-def stop_camera():
-
-    global camera
-
-    if camera is not None:
-
-        camera.release()
-
-        camera = None
-
-    return "Stopped"
+    H, W = frame.shape[:2]
 
 
-@app.route('/get_detection')
-def get_detection():
+    blob = cv2.dnn.blobFromImage(
 
-    global last_detection
+        frame,
 
-    return last_detection
+        1 / 255.0,
+
+        (416, 416),
+
+        swapRB=True,
+
+        crop=False
+
+    )
+
+
+    net.setInput(blob)
+
+
+    outputs = net.forward(output_layers)
+
+
+    boxes = []
+
+    confidences = []
+
+    class_ids = []
+
+    detection_text = ""
+
+
+    for output in outputs:
+
+        for detection in output:
+
+            scores = detection[5:]
+
+            class_id = np.argmax(scores)
+
+            confidence = scores[class_id]
+
+
+            if confidence > 0.4:
+
+
+                box = detection[0:4] * np.array(
+
+                    [W, H, W, H]
+
+                )
+
+
+                centerX, centerY, width, height = box.astype("int")
+
+
+                x = int(centerX - width / 2)
+
+                y = int(centerY - height / 2)
+
+
+                boxes.append(
+
+                    [x, y, int(width), int(height)]
+
+                )
+
+
+                confidences.append(
+
+                    float(confidence)
+
+                )
+
+
+                class_ids.append(class_id)
+
+
+    idxs = cv2.dnn.NMSBoxes(
+
+        boxes,
+
+        confidences,
+
+        0.5,
+
+        0.4
+
+    )
+
+
+    if len(idxs) > 0:
+
+
+        for i in idxs.flatten():
+
+
+            x, y, w, h = boxes[i]
+
+
+            label = labels[class_ids[i]]
+
+
+            position = get_position(
+
+                x,
+
+                w,
+
+                W
+
+            )
+
+
+            distance = calculate_distance(h)
+
+
+            detection_text = (
+
+                f"{label} at "
+
+                f"{distance:.0f} cm "
+
+                f"{position}"
+
+            )
+
+
+            cv2.rectangle(
+
+                frame,
+
+                (x, y),
+
+                (x + w, y + h),
+
+                (0,255,0),
+
+                2
+
+            )
+
+
+            cv2.putText(
+
+                frame,
+
+                detection_text,
+
+                (x, y - 10),
+
+                cv2.FONT_HERSHEY_SIMPLEX,
+
+                0.6,
+
+                (0,255,0),
+
+                2
+
+            )
+
+
+    _, buffer = cv2.imencode(
+
+        '.jpg',
+
+        frame
+
+    )
+
+
+    jpg_as_text = base64.b64encode(
+
+        buffer
+
+    ).decode('utf-8')
+
+
+    return jsonify(
+
+        {
+
+            "image": jpg_as_text,
+
+            "text": detection_text
+
+        }
+
+    )
 
 
 # ---------------- Run ---------------- #
