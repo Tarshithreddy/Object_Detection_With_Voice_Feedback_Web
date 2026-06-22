@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<title>
+
+Object Detection
+
+</title>
+
+<link rel="stylesheet"
+
+href="{{ url_for('static', filename='style.css') }}">
+
+</head>
+
+<body>
+
+<h1>
+
+Real Time Object Detection
+
+</h1>
+
+<h2>
+
+YOLOv4 Assistive System
+
+</h2>
+
+
+<button onclick="startCamera()">
+
+Start Camera
+
+</button>
+
+
+<button onclick="stopCamera()">
+
+Stop Camera
+
+</button>
+
+<br><br>
+
+<p id="voice_text"></p>
+
+<img id="video_feed">
+
+
+<script>
+
+function startCamera(){
+
+fetch('/start_camera')
+
+.then(response=>{
+
+document.getElementById("video_feed").src="/video";
+
+});
+
+}
+
+
+function stopCamera(){
+
+fetch('/stop_camera')
+
+.then(response=>{
+
+document.getElementById("video_feed").src="";
+
+speechSynthesis.cancel();
+
+});
+
+}
+
+
+let previousText="";
+
+
+setInterval(()=>{
+
+fetch("/get_detection")
+
+.then(response=>response.text())
+
+.then(data=>{
+
+if(data!="" && data!=previousText){
+
+previousText=data;
+
+document.getElementById("voice_text").innerHTML=data;
+
+
+let speech = new SpeechSynthesisUtterance(data);
+
+speech.rate=1;
+
+speech.pitch=1;
+
+speech.volume=1;
+
+
+speechSynthesis.speak(speech);
+
+}
+
+});
+
+},3000);
+
+
+</script>
+
+</body>
+
+</html>
