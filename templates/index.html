@@ -1,95 +1,85 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>YOLO Browser AI</title>
+    <title>YOLO AI System</title>
 
     <style>
         body {
             text-align: center;
             font-family: Arial;
-            background: #f5f5f5;
+            background: #f2f2f2;
         }
 
-        h2 {
-            margin-top: 20px;
+        video, img {
+            display: block;
+            margin: auto;
+            border-radius: 10px;
         }
 
         video {
-            display: block;
-            margin: auto;
             width: 400px;
-            border-radius: 10px;
         }
 
         img {
-            display: block;
-            margin: auto;
             width: 500px;
             margin-top: 10px;
-            border-radius: 10px;
         }
 
         button {
             padding: 10px 20px;
             margin: 10px;
-            border: none;
-            background: #007bff;
+            background: blue;
             color: white;
-            border-radius: 5px;
+            border: none;
             cursor: pointer;
-        }
-
-        button:hover {
-            background: #0056b3;
+            border-radius: 5px;
         }
 
         #text {
             font-size: 18px;
-            margin-top: 10px;
             font-weight: bold;
+            margin-top: 10px;
         }
     </style>
 </head>
 
 <body>
 
-    <h2>YOLO Object Detection (Browser AI)</h2>
+<h2>YOLO Object Detection</h2>
 
-    <button onclick="startCam()">Start Camera</button>
-    <button onclick="stopCam()">Stop Camera</button>
+<button onclick="start()">Start Camera</button>
+<button onclick="stop()">Stop Camera</button>
 
-    <video id="video" autoplay></video>
-    <canvas id="canvas" style="display:none;"></canvas>
+<video id="video" autoplay></video>
+<canvas id="canvas" style="display:none;"></canvas>
 
-    <p id="text">Detection will appear here</p>
+<p id="text">Waiting...</p>
 
-    <img id="output"/>
+<img id="output"/>
 
 <script>
 
-let streaming = false;
+let running = false;
 
 const video = document.getElementById("video");
 const canvas = document.getElementById("canvas");
 const output = document.getElementById("output");
 const text = document.getElementById("text");
 
-// browser camera
+// camera
 navigator.mediaDevices.getUserMedia({ video: true })
-.then(stream => {
-    video.srcObject = stream;
-});
+.then(stream => video.srcObject = stream);
 
-function startCam() {
-    streaming = true;
+function start() {
+    running = true;
 }
 
-function stopCam() {
-    streaming = false;
+function stop() {
+    running = false;
 }
 
 function sendFrame() {
-    if (!streaming) return;
+    if (!running) return;
 
     const ctx = canvas.getContext("2d");
     canvas.width = video.videoWidth;
@@ -97,23 +87,21 @@ function sendFrame() {
 
     ctx.drawImage(video, 0, 0);
 
-    let image = canvas.toDataURL("image/jpeg");
+    const image = canvas.toDataURL("image/jpeg");
 
     fetch("/detect", {
         method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({ image: image })
+        body: JSON.stringify({ image })
     })
     .then(res => res.json())
-    .then(res => {
-        if (res.image) {
-            output.src = "data:image/jpeg;base64," + res.image;
-        }
-        text.innerText = res.text;
+    .then(data => {
+        output.src = "data:image/jpeg;base64," + data.image;
+        text.innerText = data.text || "No detection";
     });
 }
 
-setInterval(sendFrame, 300);
+setInterval(sendFrame, 400);
 
 </script>
 
