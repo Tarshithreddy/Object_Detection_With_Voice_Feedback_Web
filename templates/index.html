@@ -1,124 +1,51 @@
 <!DOCTYPE html>
-
 <html>
-
 <head>
-
-<title>
-
-Object Detection
-
-</title>
-
-<link rel="stylesheet"
-
-href="{{ url_for('static', filename='style.css') }}">
-
+    <title>AI Object Detection</title>
 </head>
 
 <body>
+    <h2>Browser Based YOLO Detection</h2>
 
-<h1>
+    <video id="video" autoplay></video>
+    <canvas id="canvas" style="display:none;"></canvas>
 
-Real Time Object Detection
+    <img id="output" width="500"/>
 
-</h1>
+    <script>
+        const video = document.getElementById("video");
+        const canvas = document.getElementById("canvas");
+        const output = document.getElementById("output");
 
-<h2>
+        // open browser camera
+        navigator.mediaDevices.getUserMedia({ video: true })
+        .then(stream => {
+            video.srcObject = stream;
+        });
 
-YOLOv4 Assistive System
+        function sendFrame() {
+            const ctx = canvas.getContext("2d");
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
 
-</h2>
+            ctx.drawImage(video, 0, 0);
 
+            let data = canvas.toDataURL("image/jpeg");
 
-<button onclick="startCamera()">
+            fetch("/detect", {
+                method: "POST",
+                headers: {
+                    "Content-Type": "application/json"
+                },
+                body: JSON.stringify({ image: data })
+            })
+            .then(res => res.json())
+            .then(data => {
+                output.src = "data:image/jpeg;base64," + data.image;
+            });
+        }
 
-Start Camera
-
-</button>
-
-
-<button onclick="stopCamera()">
-
-Stop Camera
-
-</button>
-
-<br><br>
-
-<p id="voice_text"></p>
-
-<img id="video_feed">
-
-
-<script>
-
-function startCamera(){
-
-fetch('/start_camera')
-
-.then(response=>{
-
-document.getElementById("video_feed").src="/video";
-
-});
-
-}
-
-
-function stopCamera(){
-
-fetch('/stop_camera')
-
-.then(response=>{
-
-document.getElementById("video_feed").src="";
-
-speechSynthesis.cancel();
-
-});
-
-}
-
-
-let previousText="";
-
-
-setInterval(()=>{
-
-fetch("/get_detection")
-
-.then(response=>response.text())
-
-.then(data=>{
-
-if(data!="" && data!=previousText){
-
-previousText=data;
-
-document.getElementById("voice_text").innerHTML=data;
-
-
-let speech = new SpeechSynthesisUtterance(data);
-
-speech.rate=1;
-
-speech.pitch=1;
-
-speech.volume=1;
-
-
-speechSynthesis.speak(speech);
-
-}
-
-});
-
-},3000);
-
-
-</script>
-
+        setInterval(sendFrame, 200);
+    </script>
 </body>
-
 </html>
